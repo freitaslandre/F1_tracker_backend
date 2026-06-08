@@ -178,7 +178,8 @@ const fetchFromApify = async (season) => {
 };
 
 const fetchFromJolpica = async (season) => {
-  const url = `${JOLPICA_API}/${season}/results.json`;
+  // Use the races endpoint to return the full schedule (not only results)
+  const url = `${JOLPICA_API}/${season}/races.json`;
   let resp;
   try {
     resp = await fetch(url, { signal: AbortSignal.timeout(20_000) });
@@ -221,7 +222,18 @@ const getRaces = async (season) => {
     if (cached) {
       return { races: cached.races, cacheStatus: "STALE" };
     }
-    throw error;
+    // If Apify failed and we have no cache, try the public Jolpica API as a fallback
+    try {
+      const races = await fetchFromJolpica(season);
+      cache.set(season, {
+        races,
+        expiresAt: now + getCacheTtlMs(),
+      });
+      return { races, cacheStatus: "JOLPICA" };
+    } catch (jerr) {
+      // If Jolpica also failed, throw the original error to preserve context
+      throw error;
+    }
   }
 };
 
