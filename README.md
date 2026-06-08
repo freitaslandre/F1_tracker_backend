@@ -103,4 +103,36 @@ src/
 
 ### Project Notes
 
-Add your project-specific notes here.
+## F1 Race Manager API
+
+Backend Express para autenticação, preferências pessoais de Formula 1 e
+integração com o Actor Apify
+`jungle_synthesizer/jolpica-f1-results-scraper`.
+
+### Configuracao
+
+1. Copiar `.env.example` para `.env`.
+2. Definir um `JWT_SECRET` longo e aleatorio.
+3. Adicionar o token da conta Apify em `APIFY_TOKEN`.
+4. Executar `npm install` e `npm run dev`.
+
+A base de dados SQLite e criada automaticamente em
+`data/f1-race-manager.db`. O frontend Angular e aceite por CORS em
+`http://localhost:4200`.
+
+### Endpoints
+
+- `POST /api/auth/register` - cria uma conta e devolve um JWT.
+- `POST /api/auth/login` - autentica e devolve um JWT.
+- `GET /api/f1/races?season=2026` - executa o Actor Apify e usa cache.
+- `POST /api/f1/vote` - guarda ou atualiza o Piloto do Dia.
+- `POST /api/f1/favorites` - guarda um circuito favorito.
+- `GET /api/user/profile` - devolve utilizador, favoritos e votos.
+
+As rotas protegidas esperam o header:
+
+```text
+Authorization: Bearer <token>
+```
+
+Documentacao interativa: `http://localhost:3000/api-docs`.
