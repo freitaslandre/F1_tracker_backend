@@ -2,6 +2,7 @@ const httpError = require("../utils/httpError");
 
 const DEFAULT_ACTOR_URL =
   "https://api.apify.com/v2/acts/jungle_synthesizer~jolpica-f1-results-scraper/run-sync-get-dataset-items";
+const JOLPICA_API = "https://api.jolpi.ca/ergast/f1";
 const cache = new Map();
 
 const getCacheTtlMs = () => {
@@ -136,7 +137,8 @@ const normalizeRaceResults = (items) => {
 const fetchFromApify = async (season) => {
   const token = process.env.APIFY_TOKEN;
   if (!token) {
-    throw httpError(503, "APIFY_TOKEN is not configured");
+    // Fallback to Jolpica public API when APIFY_TOKEN is not configured
+    return fetchFromJolpica(season);
   }
 
   const actorUrl = process.env.APIFY_ACTOR_URL || DEFAULT_ACTOR_URL;
@@ -173,6 +175,31 @@ const fetchFromApify = async (season) => {
   }
 
   return normalizeRaceResults(items);
+};
+
+const fetchFromJolpica = async (season) => {
+  const url = `${JOLPICA_API}/${season}/results.json`;
+  let resp;
+  try {
+    resp = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  } catch (err) {
+    throw httpError(502, `Could not reach Jolpica API: ${err.message}`);
+  }
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw httpError(502, `Jolpica request failed (${resp.status}): ${txt.slice(0,200)}`);
+  }
+
+  const json = await resp.json();
+  const races = json?.MRData?.RaceTable?.Races;
+  if (!Array.isArray(races)) {
+    throw httpError(502, 'Jolpica returned an unexpected response');
+  }
+
+  // Jolpica already returns races with Results array and nested Driver/Constructor
+  // Return races as-is (they follow the same structure the frontend expects)
+  return races;
 };
 
 const getRaces = async (season) => {
