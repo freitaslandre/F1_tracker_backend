@@ -134,6 +134,22 @@ const normalizeRaceResults = (items) => {
     .sort((a, b) => Number(a.round) - Number(b.round));
 };
 
+const fetchJolpicaJson = async (url) => {
+  let resp;
+  try {
+    resp = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  } catch (err) {
+    throw httpError(502, `Could not reach Jolpica API: ${err.message}`);
+  }
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw httpError(502, `Jolpica request failed (${resp.status}): ${txt.slice(0, 200)}`);
+  }
+
+  return resp.json();
+};
+
 const fetchFromApify = async (season) => {
   const token = process.env.APIFY_TOKEN;
   if (!token) {
@@ -180,27 +196,27 @@ const fetchFromApify = async (season) => {
 const fetchFromJolpica = async (season) => {
   // Use the races endpoint to return the full schedule (not only results)
   const url = `${JOLPICA_API}/${season}/races.json`;
-  let resp;
-  try {
-    resp = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-  } catch (err) {
-    throw httpError(502, `Could not reach Jolpica API: ${err.message}`);
-  }
-
-  if (!resp.ok) {
-    const txt = await resp.text();
-    throw httpError(502, `Jolpica request failed (${resp.status}): ${txt.slice(0,200)}`);
-  }
-
-  const json = await resp.json();
+  const json = await fetchJolpicaJson(url);
   const races = json?.MRData?.RaceTable?.Races;
   if (!Array.isArray(races)) {
-    throw httpError(502, 'Jolpica returned an unexpected response');
+    throw httpError(502, "Jolpica returned an unexpected response");
   }
 
-  // Jolpica already returns races with Results array and nested Driver/Constructor
-  // Return races as-is (they follow the same structure the frontend expects)
-  return races;
+  return Promise.all(
+    races.map(async (race) => {
+      try {
+        const resultJson = await fetchJolpicaJson(
+          `${JOLPICA_API}/${season}/${race.round}/results.json`,
+        );
+        const resultRace = resultJson?.MRData?.RaceTable?.Races?.[0];
+        return resultRace?.Results?.length
+          ? { ...race, Results: resultRace.Results }
+          : race;
+      } catch {
+        return race;
+      }
+    }),
+  );
 };
 
 const getRaces = async (season) => {
