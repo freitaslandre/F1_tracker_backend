@@ -89,8 +89,23 @@ const addFavorite = (req, res, next) => {
   }
 };
 
+const removeFavorite = (req, res, next) => {
+  try {
+    const { circuitId } = req.params;
+    if (!isNonEmptyString(circuitId)) {
+      throw httpError(400, "circuitId is required");
+    }
+
+    FavoriteModel.deleteByUserAndCircuit(req.user.id, circuitId.trim());
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   addFavorite,
   getRaces,
+  removeFavorite,
   vote,
 };

@@ -101,4 +101,6 @@ router.post("/vote", requireAuth, F1Controller.vote);
  */
 router.post("/favorites", requireAuth, F1Controller.addFavorite);
 
+router.delete("/favorites/:circuitId", requireAuth, F1Controller.removeFavorite);
+
 module.exports = router;

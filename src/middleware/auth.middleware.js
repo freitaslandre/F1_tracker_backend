@@ -3,6 +3,9 @@ const httpError = require("../utils/httpError");
 
 const getJwtSecret = () => {
   if (!process.env.JWT_SECRET) {
+    if (process.env.NODE_ENV !== "production") {
+      return "development-secret-change-me";
+    }
     throw httpError(500, "JWT_SECRET is not configured");
   }
   return process.env.JWT_SECRET;

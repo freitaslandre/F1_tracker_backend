@@ -246,7 +246,7 @@ const getRaces = async (season) => {
         expiresAt: now + getCacheTtlMs(),
       });
       return { races, cacheStatus: "JOLPICA" };
-    } catch (jerr) {
+    } catch {
       // If Jolpica also failed, throw the original error to preserve context
       throw error;
     }

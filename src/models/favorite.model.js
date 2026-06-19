@@ -39,6 +39,11 @@ const findByUserStatement = db.prepare(`
   ORDER BY created_at DESC
 `);
 
+const deleteStatement = db.prepare(`
+  DELETE FROM favorites
+  WHERE user_id = ? AND circuit_id = ?
+`);
+
 const FavoriteModel = {
   upsert(favorite) {
     upsertStatement.run(favorite);
@@ -47,6 +52,10 @@ const FavoriteModel = {
 
   findByUser(userId) {
     return findByUserStatement.all(userId);
+  },
+
+  deleteByUserAndCircuit(userId, circuitId) {
+    return deleteStatement.run(userId, circuitId).changes;
   },
 };
 
