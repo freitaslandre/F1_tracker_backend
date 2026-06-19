@@ -1,4 +1,5 @@
 const FavoriteModel = require("../models/favorite.model");
+const FantasyModel = require("../models/fantasy.model");
 const UserModel = require("../models/user.model");
 const VoteModel = require("../models/vote.model");
 const httpError = require("../utils/httpError");
@@ -13,6 +14,7 @@ const getProfile = (req, res, next) => {
     return res.json({
       user,
       favorites: FavoriteModel.findByUser(user.id),
+      fantasyTeam: FantasyModel.findByUser(user.id),
       votes: VoteModel.findByUser(user.id),
     });
   } catch (error) {

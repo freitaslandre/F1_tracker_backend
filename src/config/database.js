@@ -46,8 +46,37 @@ db.exec(`
     UNIQUE (user_id, circuit_id)
   );
 
+  CREATE TABLE IF NOT EXISTS fantasy_teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    budget_limit REAL NOT NULL DEFAULT 100,
+    budget_used REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS fantasy_team_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    item_type TEXT NOT NULL CHECK (item_type IN ('driver', 'constructor')),
+    external_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    team_name TEXT,
+    nationality TEXT,
+    initials TEXT,
+    price REAL NOT NULL,
+    points REAL NOT NULL,
+    position_index INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES fantasy_teams(id) ON DELETE CASCADE,
+    UNIQUE (team_id, item_type, external_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_votes_user_id ON votes(user_id);
   CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
+  CREATE INDEX IF NOT EXISTS idx_fantasy_teams_user_id ON fantasy_teams(user_id);
+  CREATE INDEX IF NOT EXISTS idx_fantasy_items_team_id ON fantasy_team_items(team_id);
 `);
 
 module.exports = db;
