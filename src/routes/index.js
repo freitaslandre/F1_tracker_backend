@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const authRoutes = require("./auth.routes");
 const f1Routes = require("./f1.routes");
+const fantasyRoutes = require("./fantasy.routes");
 const userRoutes = require("./user.routes");
 
 const router = Router();
@@ -29,6 +30,7 @@ router.get("/", (_req, res) => {
 
 router.use("/auth", authRoutes);
 router.use("/f1", f1Routes);
+router.use("/fantasy", fantasyRoutes);
 router.use("/user", userRoutes);
 
 module.exports = router;
