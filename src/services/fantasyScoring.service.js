@@ -160,7 +160,7 @@ const scoreRace = async (season, round) => {
   }
 
   const raceMaps = buildRaceMaps(race);
-  const teams = FantasyModel.findAllTeams();
+  const teams = await FantasyModel.findAllTeams();
   const scores = teams.map((team) => {
     const details = [...team.drivers, ...team.constructors].map((item) => scoreItem(item, raceMaps));
     const basePoints = details.reduce((sum, item) => sum + item.basePoints, 0);
@@ -180,7 +180,7 @@ const scoreRace = async (season, round) => {
     };
   });
 
-  FantasyModel.saveScores(scores);
+  await FantasyModel.saveScores(scores);
 
   return {
     race: {

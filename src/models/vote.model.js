@@ -1,66 +1,63 @@
 const db = require("../config/database");
 
-const upsertStatement = db.prepare(`
-  INSERT INTO votes (
-    user_id, race_season, race_round, race_name, driver_id, driver_name
-  )
-  VALUES (
-    @userId, @raceSeason, @raceRound, @raceName, @driverId, @driverName
-  )
-  ON CONFLICT(user_id, race_season, race_round)
-  DO UPDATE SET
-    race_name = excluded.race_name,
-    driver_id = excluded.driver_id,
-    driver_name = excluded.driver_name,
-    updated_at = CURRENT_TIMESTAMP
-`);
+const votes = db.collection("votes");
+const docId = (userId, season, round) => `${userId}_${season}_${round}`;
+const nowIso = () => new Date().toISOString();
 
-const findOneStatement = db.prepare(`
-  SELECT
-    id,
-    race_season AS raceSeason,
-    race_round AS raceRound,
-    race_name AS raceName,
-    driver_id AS driverId,
-    driver_name AS driverName,
-    created_at AS createdAt,
-    updated_at AS updatedAt
-  FROM votes
-  WHERE user_id = ? AND race_season = ? AND race_round = ?
-`);
-
-const findByUserStatement = db.prepare(`
-  SELECT
-    id,
-    race_season AS raceSeason,
-    race_round AS raceRound,
-    race_name AS raceName,
-    driver_id AS driverId,
-    driver_name AS driverName,
-    created_at AS createdAt,
-    updated_at AS updatedAt
-  FROM votes
-  WHERE user_id = ?
-  ORDER BY CAST(race_season AS INTEGER) DESC, CAST(race_round AS INTEGER) ASC
-`);
-
-const deleteStatement = db.prepare(`
-  DELETE FROM votes
-  WHERE user_id = ? AND race_season = ? AND race_round = ?
-`);
+const normalizeVote = (doc) => {
+  if (!doc.exists) return null;
+  const data = doc.data();
+  return {
+    id: doc.id,
+    raceSeason: data.raceSeason,
+    raceRound: data.raceRound,
+    raceName: data.raceName,
+    driverId: data.driverId,
+    driverName: data.driverName,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+};
 
 const VoteModel = {
-  upsert(vote) {
-    upsertStatement.run(vote);
-    return findOneStatement.get(vote.userId, vote.raceSeason, vote.raceRound);
+  async upsert(vote) {
+    const ref = votes.doc(docId(vote.userId, vote.raceSeason, vote.raceRound));
+    const existing = await ref.get();
+    const createdAt = existing.data()?.createdAt || nowIso();
+
+    await ref.set({
+      userId: Number(vote.userId),
+      raceSeason: vote.raceSeason,
+      raceRound: vote.raceRound,
+      raceName: vote.raceName,
+      driverId: vote.driverId,
+      driverName: vote.driverName,
+      createdAt,
+      updatedAt: nowIso(),
+    });
+
+    return normalizeVote(await ref.get());
   },
 
-  findByUser(userId) {
-    return findByUserStatement.all(userId);
+  async findByUser(userId) {
+    const snapshot = await votes.where("userId", "==", Number(userId)).get();
+    return snapshot.docs
+      .map(normalizeVote)
+      .sort((a, b) =>
+        Number(b.raceSeason) - Number(a.raceSeason) ||
+        Number(a.raceRound) - Number(b.raceRound),
+      );
   },
 
-  deleteByUserAndRace(userId, raceSeason, raceRound) {
-    return deleteStatement.run(userId, raceSeason, raceRound).changes;
+  async deleteByUserAndRace(userId, raceSeason, raceRound) {
+    const ref = votes.doc(docId(userId, raceSeason, raceRound));
+    const doc = await ref.get();
+    if (!doc.exists) {
+      return 0;
+    }
+
+    await ref.delete();
+    return 1;
   },
 };
 

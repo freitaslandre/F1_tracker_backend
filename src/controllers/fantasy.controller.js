@@ -23,17 +23,17 @@ const validateConstructor = (constructor) =>
   isValidNumber(constructor.price) &&
   isValidNumber(constructor.points);
 
-const getTeam = (req, res, next) => {
+const getTeam = async (req, res, next) => {
   try {
     return res.json({
-      team: FantasyModel.findByUser(req.user.id),
+      team: await FantasyModel.findByUser(req.user.id),
     });
   } catch (error) {
     return next(error);
   }
 };
 
-const saveTeam = (req, res, next) => {
+const saveTeam = async (req, res, next) => {
   try {
     const { drivers, constructors, budgetLimit = 100, budgetUsed } = req.body;
 
@@ -59,7 +59,7 @@ const saveTeam = (req, res, next) => {
       throw httpError(400, "Fantasy team exceeds the available budget");
     }
 
-    const savedTeam = FantasyModel.save({
+    const savedTeam = await FantasyModel.save({
       userId: req.user.id,
       budgetLimit: Number(budgetLimit),
       budgetUsed: finalBudgetUsed,
@@ -87,26 +87,26 @@ const saveTeam = (req, res, next) => {
   }
 };
 
-const deleteTeam = (req, res, next) => {
+const deleteTeam = async (req, res, next) => {
   try {
-    FantasyModel.deleteByUser(req.user.id);
+    await FantasyModel.deleteByUser(req.user.id);
     return res.status(204).send();
   } catch (error) {
     return next(error);
   }
 };
 
-const getScores = (req, res, next) => {
+const getScores = async (req, res, next) => {
   try {
-    return res.json({ scores: FantasyModel.findScoresByUser(req.user.id) });
+    return res.json({ scores: await FantasyModel.findScoresByUser(req.user.id) });
   } catch (error) {
     return next(error);
   }
 };
 
-const leaderboard = (_req, res, next) => {
+const leaderboard = async (_req, res, next) => {
   try {
-    return res.json({ leaderboard: FantasyModel.leaderboard() });
+    return res.json({ leaderboard: await FantasyModel.leaderboard() });
   } catch (error) {
     return next(error);
   }

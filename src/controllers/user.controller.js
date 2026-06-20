@@ -4,18 +4,24 @@ const UserModel = require("../models/user.model");
 const VoteModel = require("../models/vote.model");
 const httpError = require("../utils/httpError");
 
-const getProfile = (req, res, next) => {
+const getProfile = async (req, res, next) => {
   try {
-    const user = UserModel.findPublicById(req.user.id);
+    const user = await UserModel.findPublicById(req.user.id);
     if (!user) {
       throw httpError(404, "User not found");
     }
 
+    const [favorites, fantasyTeam, votes] = await Promise.all([
+      FavoriteModel.findByUser(user.id),
+      FantasyModel.findByUser(user.id),
+      VoteModel.findByUser(user.id),
+    ]);
+
     return res.json({
       user,
-      favorites: FavoriteModel.findByUser(user.id),
-      fantasyTeam: FantasyModel.findByUser(user.id),
-      votes: VoteModel.findByUser(user.id),
+      favorites,
+      fantasyTeam,
+      votes,
     });
   } catch (error) {
     return next(error);

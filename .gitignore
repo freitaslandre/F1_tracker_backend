@@ -4,3 +4,5 @@ node_modules/
 grade-report*.html
 dist/
 data/
+firebase-service-account*.json
+serviceAccountKey*.json
