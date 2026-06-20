@@ -1,6 +1,9 @@
 {
   "name": "webtech-final-project-backend-template",
   "version": "0.0.0",
+  "engines": {
+    "node": "20"
+  },
   "scripts": {
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "start": "node src/server.js",
@@ -21,7 +24,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "firebase-admin": "^14.0.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5",
     "jsonwebtoken": "^9.0.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
