@@ -83,6 +83,20 @@ const vote = (req, res, next) => {
   }
 };
 
+const removeVote = (req, res, next) => {
+  try {
+    const { season, round } = req.params;
+    if (!isNonEmptyString(season) || !isNonEmptyString(round)) {
+      throw httpError(400, "season and round are required");
+    }
+
+    VoteModel.deleteByUserAndRace(req.user.id, season.trim(), round.trim());
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const addFavorite = (req, res, next) => {
   try {
     const { circuitId, circuitName, locality = "", country } = req.body;
@@ -131,5 +145,6 @@ module.exports = {
   getRaces,
   getStandings,
   removeFavorite,
+  removeVote,
   vote,
 };

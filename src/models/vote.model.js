@@ -44,6 +44,11 @@ const findByUserStatement = db.prepare(`
   ORDER BY CAST(race_season AS INTEGER) DESC, CAST(race_round AS INTEGER) ASC
 `);
 
+const deleteStatement = db.prepare(`
+  DELETE FROM votes
+  WHERE user_id = ? AND race_season = ? AND race_round = ?
+`);
+
 const VoteModel = {
   upsert(vote) {
     upsertStatement.run(vote);
@@ -52,6 +57,10 @@ const VoteModel = {
 
   findByUser(userId) {
     return findByUserStatement.all(userId);
+  },
+
+  deleteByUserAndRace(userId, raceSeason, raceRound) {
+    return deleteStatement.run(userId, raceSeason, raceRound).changes;
   },
 };
 
