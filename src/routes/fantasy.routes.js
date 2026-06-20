@@ -4,6 +4,9 @@ const { requireAuth } = require("../middleware/auth.middleware");
 
 const router = Router();
 
+router.get("/leaderboard", FantasyController.leaderboard);
+router.post("/score-race", requireAuth, FantasyController.scoreRace);
+router.get("/scores", requireAuth, FantasyController.getScores);
 router.get("/team", requireAuth, FantasyController.getTeam);
 router.put("/team", requireAuth, FantasyController.saveTeam);
 router.delete("/team", requireAuth, FantasyController.deleteTeam);

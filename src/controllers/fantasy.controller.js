@@ -1,4 +1,5 @@
 const FantasyModel = require("../models/fantasy.model");
+const FantasyScoringService = require("../services/fantasyScoring.service");
 const httpError = require("../utils/httpError");
 const { isNonEmptyString } = require("../utils/validation");
 
@@ -95,8 +96,43 @@ const deleteTeam = (req, res, next) => {
   }
 };
 
+const getScores = (req, res, next) => {
+  try {
+    return res.json({ scores: FantasyModel.findScoresByUser(req.user.id) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const leaderboard = (_req, res, next) => {
+  try {
+    return res.json({ leaderboard: FantasyModel.leaderboard() });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const scoreRace = async (req, res, next) => {
+  try {
+    const season = String(req.body.season || req.query.season || "");
+    const round = String(req.body.round || req.query.round || "");
+
+    if (!season || !round) {
+      throw httpError(400, "season and round are required");
+    }
+
+    const result = await FantasyScoringService.scoreRace(season, round);
+    return res.status(201).json(result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   deleteTeam,
   getTeam,
+  getScores,
+  leaderboard,
   saveTeam,
+  scoreRace,
 };

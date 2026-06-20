@@ -22,6 +22,18 @@ const findTeamByUserStatement = db.prepare(`
   WHERE user_id = ?
 `);
 
+const findAllTeamsStatement = db.prepare(`
+  SELECT
+    id,
+    user_id AS userId,
+    budget_limit AS budgetLimit,
+    budget_used AS budgetUsed,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  FROM fantasy_teams
+  ORDER BY updated_at ASC
+`);
+
 const deleteItemsStatement = db.prepare(`
   DELETE FROM fantasy_team_items
   WHERE team_id = ?
@@ -61,6 +73,73 @@ const deleteTeamStatement = db.prepare(`
   WHERE user_id = ?
 `);
 
+const upsertScoreStatement = db.prepare(`
+  INSERT INTO fantasy_scores (
+    team_id, user_id, race_season, race_round, race_name,
+    base_points, race_points, total_points, details_json, updated_at
+  )
+  VALUES (
+    @teamId, @userId, @raceSeason, @raceRound, @raceName,
+    @basePoints, @racePoints, @totalPoints, @detailsJson, CURRENT_TIMESTAMP
+  )
+  ON CONFLICT(team_id, race_season, race_round)
+  DO UPDATE SET
+    race_name = excluded.race_name,
+    base_points = excluded.base_points,
+    race_points = excluded.race_points,
+    total_points = excluded.total_points,
+    details_json = excluded.details_json,
+    updated_at = CURRENT_TIMESTAMP
+`);
+
+const findScoresByUserStatement = db.prepare(`
+  SELECT
+    id,
+    race_season AS raceSeason,
+    race_round AS raceRound,
+    race_name AS raceName,
+    base_points AS basePoints,
+    race_points AS racePoints,
+    total_points AS totalPoints,
+    details_json AS detailsJson,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  FROM fantasy_scores
+  WHERE user_id = ?
+  ORDER BY CAST(race_season AS INTEGER) DESC, CAST(race_round AS INTEGER) DESC
+`);
+
+const leaderboardStatement = db.prepare(`
+  SELECT
+    users.id AS userId,
+    users.name AS userName,
+    fantasy_teams.id AS teamId,
+    fantasy_teams.budget_used AS budgetUsed,
+    fantasy_teams.updated_at AS updatedAt,
+    COALESCE(scores.basePoints, 0) AS basePoints,
+    COALESCE(scores.racePoints, 0) AS racePoints,
+    COALESCE(scores.totalPoints, 0) AS totalPoints,
+    COALESCE(scores.scoredRaces, 0) AS scoredRaces,
+    COALESCE(items.driverCount, 0) AS driverCount,
+    COALESCE(items.constructorCount, 0) AS constructorCount
+  FROM fantasy_teams
+  JOIN users ON users.id = fantasy_teams.user_id
+  LEFT JOIN (
+    SELECT team_id, SUM(base_points) AS basePoints, SUM(race_points) AS racePoints,
+           SUM(total_points) AS totalPoints, COUNT(*) AS scoredRaces
+    FROM fantasy_scores
+    GROUP BY team_id
+  ) scores ON scores.team_id = fantasy_teams.id
+  LEFT JOIN (
+    SELECT team_id,
+           SUM(CASE WHEN item_type = 'driver' THEN 1 ELSE 0 END) AS driverCount,
+           SUM(CASE WHEN item_type = 'constructor' THEN 1 ELSE 0 END) AS constructorCount
+    FROM fantasy_team_items
+    GROUP BY team_id
+  ) items ON items.team_id = fantasy_teams.id
+  ORDER BY totalPoints DESC, racePoints DESC, fantasy_teams.updated_at ASC
+`);
+
 const normalizeTeam = (team) => {
   if (!team) return null;
 
@@ -71,6 +150,16 @@ const normalizeTeam = (team) => {
     constructors: items.filter((item) => item.itemType === "constructor"),
   };
 };
+
+const normalizeScore = (score) => ({
+  ...score,
+  details: JSON.parse(score.detailsJson || "[]"),
+  detailsJson: undefined,
+});
+
+const scoreTransaction = db.transaction((scores) => {
+  scores.forEach((score) => upsertScoreStatement.run(score));
+});
 
 const saveTransaction = db.transaction(({ userId, budgetLimit, budgetUsed, drivers, constructors }) => {
   upsertTeamStatement.run({ userId, budgetLimit, budgetUsed });
@@ -116,12 +205,33 @@ const FantasyModel = {
     return normalizeTeam(findTeamByUserStatement.get(userId));
   },
 
+  findAllTeams() {
+    return findAllTeamsStatement.all().map(normalizeTeam);
+  },
+
   save(team) {
     return saveTransaction(team);
   },
 
   deleteByUser(userId) {
     return deleteTeamStatement.run(userId).changes;
+  },
+
+  saveScores(scores) {
+    scoreTransaction(scores);
+    return scores;
+  },
+
+  findScoresByUser(userId) {
+    return findScoresByUserStatement.all(userId).map(normalizeScore);
+  },
+
+  leaderboard() {
+    return leaderboardStatement.all().map((entry) => ({
+      ...entry,
+      projectedPoints: Number(entry.totalPoints),
+      isComplete: entry.driverCount >= 5 && entry.constructorCount >= 2,
+    }));
   },
 };
 

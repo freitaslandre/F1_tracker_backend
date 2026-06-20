@@ -73,10 +73,30 @@ db.exec(`
     UNIQUE (team_id, item_type, external_id)
   );
 
+  CREATE TABLE IF NOT EXISTS fantasy_scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    race_season TEXT NOT NULL,
+    race_round TEXT NOT NULL,
+    race_name TEXT NOT NULL,
+    base_points REAL NOT NULL DEFAULT 0,
+    race_points REAL NOT NULL DEFAULT 0,
+    total_points REAL NOT NULL DEFAULT 0,
+    details_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES fantasy_teams(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (team_id, race_season, race_round)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_votes_user_id ON votes(user_id);
   CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
   CREATE INDEX IF NOT EXISTS idx_fantasy_teams_user_id ON fantasy_teams(user_id);
   CREATE INDEX IF NOT EXISTS idx_fantasy_items_team_id ON fantasy_team_items(team_id);
+  CREATE INDEX IF NOT EXISTS idx_fantasy_scores_user_id ON fantasy_scores(user_id);
+  CREATE INDEX IF NOT EXISTS idx_fantasy_scores_race ON fantasy_scores(race_season, race_round);
 `);
 
 module.exports = db;
