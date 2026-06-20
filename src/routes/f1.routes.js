@@ -66,6 +66,7 @@ router.get("/standings", F1Controller.getStandings);
  *         description: Authentication required
  */
 router.post("/vote", requireAuth, F1Controller.vote);
+router.delete("/vote/:season/:round", requireAuth, F1Controller.removeVote);
 
 /**
  * @swagger
