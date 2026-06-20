@@ -1,4 +1,5 @@
-const admin = require("firebase-admin");
+const { cert, getApps, initializeApp, applicationDefault } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
 
 const parseServiceAccount = () => {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
@@ -12,15 +13,15 @@ const parseServiceAccount = () => {
   return null;
 };
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   const serviceAccount = parseServiceAccount();
 
-  admin.initializeApp({
+  initializeApp({
     credential: serviceAccount
-      ? admin.credential.cert(serviceAccount)
-      : admin.credential.applicationDefault(),
+      ? cert(serviceAccount)
+      : applicationDefault(),
     projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id,
   });
 }
 
-module.exports = admin.firestore();
+module.exports = getFirestore();
