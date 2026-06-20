@@ -1,4 +1,7 @@
 const { Router } = require("express");
+const authRoutes = require("./auth.routes");
+const f1Routes = require("./f1.routes");
+const fantasyRoutes = require("./fantasy.routes");
 
 const router = Router();
 
@@ -24,8 +27,8 @@ router.get("/", (_req, res) => {
   res.json({ message: "API is running" });
 });
 
-// TODO: import and register your feature routes here
-// const exampleRoutes = require("./example.routes");
-// router.use("/examples", exampleRoutes);
+router.use("/auth", authRoutes);
+router.use("/f1", f1Routes);
+router.use("/fantasy", fantasyRoutes);
 
 module.exports = router;
