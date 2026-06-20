@@ -44,7 +44,7 @@ const register = async (req, res, next) => {
     }
 
     const normalizedEmail = normalizeEmail(email);
-    if (UserModel.findByEmail(normalizedEmail)) {
+    if (await UserModel.findByEmail(normalizedEmail)) {
       throw httpError(409, "An account with this email already exists");
     }
 
@@ -52,11 +52,14 @@ const register = async (req, res, next) => {
       password,
       Number(process.env.BCRYPT_ROUNDS || 12),
     );
-    const user = UserModel.create({
+    const user = await UserModel.create({
       name: name.trim(),
       email: normalizedEmail,
       passwordHash,
     });
+    if (!user) {
+      throw httpError(409, "An account with this email already exists");
+    }
 
     setSessionCookie(res, user);
     return res.status(201).json({ user });
@@ -72,7 +75,7 @@ const login = async (req, res, next) => {
       throw httpError(400, "Email and password are required");
     }
 
-    const user = UserModel.findByEmail(normalizeEmail(email));
+    const user = await UserModel.findByEmail(normalizeEmail(email));
     const passwordMatches =
       user && (await bcrypt.compare(password, user.passwordHash));
 
@@ -93,9 +96,9 @@ const login = async (req, res, next) => {
   }
 };
 
-const me = (req, res, next) => {
+const me = async (req, res, next) => {
   try {
-    const user = UserModel.findPublicById(req.user.id);
+    const user = await UserModel.findPublicById(req.user.id);
     if (!user) {
       throw httpError(404, "User not found");
     }

@@ -1,237 +1,195 @@
 const db = require("../config/database");
 
-const upsertTeamStatement = db.prepare(`
-  INSERT INTO fantasy_teams (user_id, budget_limit, budget_used)
-  VALUES (@userId, @budgetLimit, @budgetUsed)
-  ON CONFLICT(user_id)
-  DO UPDATE SET
-    budget_limit = excluded.budget_limit,
-    budget_used = excluded.budget_used,
-    updated_at = CURRENT_TIMESTAMP
-`);
+const teams = db.collection("fantasy_teams");
+const scores = db.collection("fantasy_scores");
+const users = db.collection("users");
+const nowIso = () => new Date().toISOString();
 
-const findTeamByUserStatement = db.prepare(`
-  SELECT
-    id,
-    user_id AS userId,
-    budget_limit AS budgetLimit,
-    budget_used AS budgetUsed,
-    created_at AS createdAt,
-    updated_at AS updatedAt
-  FROM fantasy_teams
-  WHERE user_id = ?
-`);
+const teamDocId = (userId) => String(userId);
+const scoreDocId = (teamId, raceSeason, raceRound) => `${teamId}_${raceSeason}_${raceRound}`;
 
-const findAllTeamsStatement = db.prepare(`
-  SELECT
-    id,
-    user_id AS userId,
-    budget_limit AS budgetLimit,
-    budget_used AS budgetUsed,
-    created_at AS createdAt,
-    updated_at AS updatedAt
-  FROM fantasy_teams
-  ORDER BY updated_at ASC
-`);
-
-const deleteItemsStatement = db.prepare(`
-  DELETE FROM fantasy_team_items
-  WHERE team_id = ?
-`);
-
-const insertItemStatement = db.prepare(`
-  INSERT INTO fantasy_team_items (
-    team_id, item_type, external_id, name, team_name, nationality,
-    initials, price, points, position_index
-  )
-  VALUES (
-    @teamId, @itemType, @externalId, @name, @teamName, @nationality,
-    @initials, @price, @points, @positionIndex
-  )
-`);
-
-const findItemsByTeamStatement = db.prepare(`
-  SELECT
-    id,
-    item_type AS itemType,
-    external_id AS externalId,
-    name,
-    team_name AS teamName,
-    nationality,
-    initials,
-    price,
-    points,
-    position_index AS positionIndex,
-    created_at AS createdAt
-  FROM fantasy_team_items
-  WHERE team_id = ?
-  ORDER BY item_type ASC, position_index ASC
-`);
-
-const deleteTeamStatement = db.prepare(`
-  DELETE FROM fantasy_teams
-  WHERE user_id = ?
-`);
-
-const upsertScoreStatement = db.prepare(`
-  INSERT INTO fantasy_scores (
-    team_id, user_id, race_season, race_round, race_name,
-    base_points, race_points, total_points, details_json, updated_at
-  )
-  VALUES (
-    @teamId, @userId, @raceSeason, @raceRound, @raceName,
-    @basePoints, @racePoints, @totalPoints, @detailsJson, CURRENT_TIMESTAMP
-  )
-  ON CONFLICT(team_id, race_season, race_round)
-  DO UPDATE SET
-    race_name = excluded.race_name,
-    base_points = excluded.base_points,
-    race_points = excluded.race_points,
-    total_points = excluded.total_points,
-    details_json = excluded.details_json,
-    updated_at = CURRENT_TIMESTAMP
-`);
-
-const findScoresByUserStatement = db.prepare(`
-  SELECT
-    id,
-    race_season AS raceSeason,
-    race_round AS raceRound,
-    race_name AS raceName,
-    base_points AS basePoints,
-    race_points AS racePoints,
-    total_points AS totalPoints,
-    details_json AS detailsJson,
-    created_at AS createdAt,
-    updated_at AS updatedAt
-  FROM fantasy_scores
-  WHERE user_id = ?
-  ORDER BY CAST(race_season AS INTEGER) DESC, CAST(race_round AS INTEGER) DESC
-`);
-
-const leaderboardStatement = db.prepare(`
-  SELECT
-    users.id AS userId,
-    users.name AS userName,
-    fantasy_teams.id AS teamId,
-    fantasy_teams.budget_used AS budgetUsed,
-    fantasy_teams.updated_at AS updatedAt,
-    COALESCE(scores.basePoints, 0) AS basePoints,
-    COALESCE(scores.racePoints, 0) AS racePoints,
-    COALESCE(scores.totalPoints, 0) AS totalPoints,
-    COALESCE(scores.scoredRaces, 0) AS scoredRaces,
-    COALESCE(items.driverCount, 0) AS driverCount,
-    COALESCE(items.constructorCount, 0) AS constructorCount
-  FROM fantasy_teams
-  JOIN users ON users.id = fantasy_teams.user_id
-  LEFT JOIN (
-    SELECT team_id, SUM(base_points) AS basePoints, SUM(race_points) AS racePoints,
-           SUM(total_points) AS totalPoints, COUNT(*) AS scoredRaces
-    FROM fantasy_scores
-    GROUP BY team_id
-  ) scores ON scores.team_id = fantasy_teams.id
-  LEFT JOIN (
-    SELECT team_id,
-           SUM(CASE WHEN item_type = 'driver' THEN 1 ELSE 0 END) AS driverCount,
-           SUM(CASE WHEN item_type = 'constructor' THEN 1 ELSE 0 END) AS constructorCount
-    FROM fantasy_team_items
-    GROUP BY team_id
-  ) items ON items.team_id = fantasy_teams.id
-  ORDER BY totalPoints DESC, racePoints DESC, fantasy_teams.updated_at ASC
-`);
-
-const normalizeTeam = (team) => {
-  if (!team) return null;
-
-  const items = findItemsByTeamStatement.all(team.id);
+const normalizeTeam = (doc) => {
+  if (!doc.exists) return null;
+  const data = doc.data();
   return {
-    ...team,
-    drivers: items.filter((item) => item.itemType === "driver"),
-    constructors: items.filter((item) => item.itemType === "constructor"),
+    id: Number(doc.id),
+    userId: Number(data.userId),
+    budgetLimit: data.budgetLimit,
+    budgetUsed: data.budgetUsed,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    drivers: data.drivers || [],
+    constructors: data.constructors || [],
   };
 };
 
-const normalizeScore = (score) => ({
-  ...score,
-  details: JSON.parse(score.detailsJson || "[]"),
-  detailsJson: undefined,
-});
+const normalizeScore = (doc) => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    raceSeason: data.raceSeason,
+    raceRound: data.raceRound,
+    raceName: data.raceName,
+    basePoints: data.basePoints,
+    racePoints: data.racePoints,
+    totalPoints: data.totalPoints,
+    details: data.details || [],
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+};
 
-const scoreTransaction = db.transaction((scores) => {
-  scores.forEach((score) => upsertScoreStatement.run(score));
-});
-
-const saveTransaction = db.transaction(({ userId, budgetLimit, budgetUsed, drivers, constructors }) => {
-  upsertTeamStatement.run({ userId, budgetLimit, budgetUsed });
-  const team = findTeamByUserStatement.get(userId);
-
-  deleteItemsStatement.run(team.id);
-
-  drivers.forEach((driver, index) => {
-    insertItemStatement.run({
-      teamId: team.id,
-      itemType: "driver",
-      externalId: driver.id,
-      name: driver.name,
-      teamName: driver.team,
-      nationality: "",
-      initials: driver.initials,
-      price: driver.price,
-      points: driver.points,
-      positionIndex: index,
-    });
-  });
-
-  constructors.forEach((constructor, index) => {
-    insertItemStatement.run({
-      teamId: team.id,
-      itemType: "constructor",
-      externalId: constructor.id,
-      name: constructor.name,
-      teamName: "",
-      nationality: constructor.nationality,
-      initials: constructor.initials,
-      price: constructor.price,
-      points: constructor.points,
-      positionIndex: index,
-    });
-  });
-
-  return normalizeTeam(findTeamByUserStatement.get(userId));
+const fantasyItem = (item, itemType, positionIndex) => ({
+  id: `${itemType}-${item.id}`,
+  itemType,
+  externalId: item.id,
+  name: item.name,
+  teamName: item.team || "",
+  nationality: item.nationality || "",
+  initials: item.initials,
+  price: Number(item.price),
+  points: Number(item.points),
+  positionIndex,
+  createdAt: nowIso(),
 });
 
 const FantasyModel = {
-  findByUser(userId) {
-    return normalizeTeam(findTeamByUserStatement.get(userId));
+  async findByUser(userId) {
+    return normalizeTeam(await teams.doc(teamDocId(userId)).get());
   },
 
-  findAllTeams() {
-    return findAllTeamsStatement.all().map(normalizeTeam);
+  async findAllTeams() {
+    const snapshot = await teams.get();
+    return snapshot.docs
+      .map(normalizeTeam)
+      .filter(Boolean)
+      .sort((a, b) => String(a.updatedAt).localeCompare(String(b.updatedAt)));
   },
 
-  save(team) {
-    return saveTransaction(team);
+  async save({ userId, budgetLimit, budgetUsed, drivers, constructors }) {
+    const ref = teams.doc(teamDocId(userId));
+    const existing = await ref.get();
+    const createdAt = existing.data()?.createdAt || nowIso();
+    const updatedAt = nowIso();
+
+    await ref.set({
+      userId: Number(userId),
+      budgetLimit: Number(budgetLimit),
+      budgetUsed: Number(budgetUsed),
+      createdAt,
+      updatedAt,
+      drivers: drivers.map((driver, index) => fantasyItem(driver, "driver", index)),
+      constructors: constructors.map((constructor, index) =>
+        fantasyItem(constructor, "constructor", index),
+      ),
+    });
+
+    return normalizeTeam(await ref.get());
   },
 
-  deleteByUser(userId) {
-    return deleteTeamStatement.run(userId).changes;
+  async deleteByUser(userId) {
+    const ref = teams.doc(teamDocId(userId));
+    const doc = await ref.get();
+    if (!doc.exists) {
+      return 0;
+    }
+
+    await ref.delete();
+    return 1;
   },
 
-  saveScores(scores) {
-    scoreTransaction(scores);
-    return scores;
+  async saveScores(newScores) {
+    if (newScores.length === 0) {
+      return newScores;
+    }
+
+    const batch = db.batch();
+    const updatedAt = nowIso();
+
+    newScores.forEach((score) => {
+      const ref = scores.doc(scoreDocId(score.teamId, score.raceSeason, score.raceRound));
+      batch.set(ref, {
+        teamId: Number(score.teamId),
+        userId: Number(score.userId),
+        raceSeason: score.raceSeason,
+        raceRound: score.raceRound,
+        raceName: score.raceName,
+        basePoints: Number(score.basePoints),
+        racePoints: Number(score.racePoints),
+        totalPoints: Number(score.totalPoints),
+        details: JSON.parse(score.detailsJson || "[]"),
+        createdAt: updatedAt,
+        updatedAt,
+      }, { merge: true });
+    });
+
+    await batch.commit();
+    return newScores;
   },
 
-  findScoresByUser(userId) {
-    return findScoresByUserStatement.all(userId).map(normalizeScore);
+  async findScoresByUser(userId) {
+    const snapshot = await scores.where("userId", "==", Number(userId)).get();
+    return snapshot.docs
+      .map(normalizeScore)
+      .sort((a, b) =>
+        Number(b.raceSeason) - Number(a.raceSeason) ||
+        Number(b.raceRound) - Number(a.raceRound),
+      );
   },
 
-  leaderboard() {
-    return leaderboardStatement.all().map((entry) => ({
-      ...entry,
-      projectedPoints: Number(entry.totalPoints),
-      isComplete: entry.driverCount >= 5 && entry.constructorCount >= 2,
+  async leaderboard() {
+    const [teamList, scoreSnapshot] = await Promise.all([
+      this.findAllTeams(),
+      scores.get(),
+    ]);
+    const scoresByTeam = scoreSnapshot.docs.reduce((acc, doc) => {
+      const score = doc.data();
+      const teamId = Number(score.teamId);
+      const current = acc[teamId] || {
+        basePoints: 0,
+        racePoints: 0,
+        totalPoints: 0,
+        scoredRaces: 0,
+      };
+
+      acc[teamId] = {
+        basePoints: current.basePoints + Number(score.basePoints || 0),
+        racePoints: current.racePoints + Number(score.racePoints || 0),
+        totalPoints: current.totalPoints + Number(score.totalPoints || 0),
+        scoredRaces: current.scoredRaces + 1,
+      };
+      return acc;
+    }, {});
+
+    const entries = await Promise.all(teamList.map(async (team) => {
+      const userDoc = await users.doc(String(team.userId)).get();
+      const user = userDoc.data() || {};
+      const score = scoresByTeam[team.id] || {
+        basePoints: 0,
+        racePoints: 0,
+        totalPoints: 0,
+        scoredRaces: 0,
+      };
+
+      return {
+        userId: team.userId,
+        userName: user.name || "F1 Fan",
+        teamId: team.id,
+        budgetUsed: team.budgetUsed,
+        updatedAt: team.updatedAt,
+        ...score,
+        projectedPoints: Number(score.totalPoints),
+        driverCount: team.drivers.length,
+        constructorCount: team.constructors.length,
+        isComplete: team.drivers.length >= 5 && team.constructors.length >= 2,
+      };
     }));
+
+    return entries.sort((a, b) =>
+      b.totalPoints - a.totalPoints ||
+      b.racePoints - a.racePoints ||
+      String(a.updatedAt).localeCompare(String(b.updatedAt)),
+    );
   },
 };
 

@@ -50,7 +50,7 @@ const getStandings = async (req, res, next) => {
   }
 };
 
-const vote = (req, res, next) => {
+const vote = async (req, res, next) => {
   try {
     const {
       raceSeason,
@@ -68,7 +68,7 @@ const vote = (req, res, next) => {
       );
     }
 
-    const savedVote = VoteModel.upsert({
+    const savedVote = await VoteModel.upsert({
       userId: req.user.id,
       raceSeason: raceSeason.trim(),
       raceRound: raceRound.trim(),
@@ -83,21 +83,21 @@ const vote = (req, res, next) => {
   }
 };
 
-const removeVote = (req, res, next) => {
+const removeVote = async (req, res, next) => {
   try {
     const { season, round } = req.params;
     if (!isNonEmptyString(season) || !isNonEmptyString(round)) {
       throw httpError(400, "season and round are required");
     }
 
-    VoteModel.deleteByUserAndRace(req.user.id, season.trim(), round.trim());
+    await VoteModel.deleteByUserAndRace(req.user.id, season.trim(), round.trim());
     return res.status(204).send();
   } catch (error) {
     return next(error);
   }
 };
 
-const addFavorite = (req, res, next) => {
+const addFavorite = async (req, res, next) => {
   try {
     const { circuitId, circuitName, locality = "", country } = req.body;
 
@@ -112,7 +112,7 @@ const addFavorite = (req, res, next) => {
       );
     }
 
-    const favorite = FavoriteModel.upsert({
+    const favorite = await FavoriteModel.upsert({
       userId: req.user.id,
       circuitId: circuitId.trim(),
       circuitName: circuitName.trim(),
@@ -126,14 +126,14 @@ const addFavorite = (req, res, next) => {
   }
 };
 
-const removeFavorite = (req, res, next) => {
+const removeFavorite = async (req, res, next) => {
   try {
     const { circuitId } = req.params;
     if (!isNonEmptyString(circuitId)) {
       throw httpError(400, "circuitId is required");
     }
 
-    FavoriteModel.deleteByUserAndCircuit(req.user.id, circuitId.trim());
+    await FavoriteModel.deleteByUserAndCircuit(req.user.id, circuitId.trim());
     return res.status(204).send();
   } catch (error) {
     return next(error);

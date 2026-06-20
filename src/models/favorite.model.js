@@ -1,61 +1,59 @@
 const db = require("../config/database");
 
-const upsertStatement = db.prepare(`
-  INSERT INTO favorites (
-    user_id, circuit_id, circuit_name, locality, country
-  )
-  VALUES (
-    @userId, @circuitId, @circuitName, @locality, @country
-  )
-  ON CONFLICT(user_id, circuit_id)
-  DO UPDATE SET
-    circuit_name = excluded.circuit_name,
-    locality = excluded.locality,
-    country = excluded.country
-`);
+const favorites = db.collection("favorites");
+const docId = (userId, circuitId) => `${userId}_${encodeURIComponent(circuitId)}`;
+const nowIso = () => new Date().toISOString();
 
-const findOneStatement = db.prepare(`
-  SELECT
-    id,
-    circuit_id AS circuitId,
-    circuit_name AS circuitName,
-    locality,
-    country,
-    created_at AS createdAt
-  FROM favorites
-  WHERE user_id = ? AND circuit_id = ?
-`);
-
-const findByUserStatement = db.prepare(`
-  SELECT
-    id,
-    circuit_id AS circuitId,
-    circuit_name AS circuitName,
-    locality,
-    country,
-    created_at AS createdAt
-  FROM favorites
-  WHERE user_id = ?
-  ORDER BY created_at DESC
-`);
-
-const deleteStatement = db.prepare(`
-  DELETE FROM favorites
-  WHERE user_id = ? AND circuit_id = ?
-`);
+const normalizeFavorite = (doc) => {
+  if (!doc.exists) return null;
+  const data = doc.data();
+  return {
+    id: doc.id,
+    circuitId: data.circuitId,
+    circuitName: data.circuitName,
+    locality: data.locality,
+    country: data.country,
+    raceName: data.raceName,
+    createdAt: data.createdAt,
+  };
+};
 
 const FavoriteModel = {
-  upsert(favorite) {
-    upsertStatement.run(favorite);
-    return findOneStatement.get(favorite.userId, favorite.circuitId);
+  async upsert(favorite) {
+    const ref = favorites.doc(docId(favorite.userId, favorite.circuitId));
+    const existing = await ref.get();
+    const createdAt = existing.data()?.createdAt || nowIso();
+
+    await ref.set({
+      userId: Number(favorite.userId),
+      circuitId: favorite.circuitId,
+      circuitName: favorite.circuitName,
+      locality: favorite.locality,
+      country: favorite.country,
+      raceName: favorite.raceName || "",
+      createdAt,
+      updatedAt: nowIso(),
+    });
+
+    return normalizeFavorite(await ref.get());
   },
 
-  findByUser(userId) {
-    return findByUserStatement.all(userId);
+  async findByUser(userId) {
+    const snapshot = await favorites.where("userId", "==", Number(userId)).get();
+    return snapshot.docs
+      .map(normalizeFavorite)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   },
 
-  deleteByUserAndCircuit(userId, circuitId) {
-    return deleteStatement.run(userId, circuitId).changes;
+  async deleteByUserAndCircuit(userId, circuitId) {
+    const ref = favorites.doc(docId(userId, circuitId));
+    const doc = await ref.get();
+    if (!doc.exists) {
+      return 0;
+    }
+
+    await ref.delete();
+    return 1;
   },
 };
 
