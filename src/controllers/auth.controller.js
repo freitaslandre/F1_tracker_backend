@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const UserModel = require("../models/user.model");
-const { getJwtSecret } = require("../middleware/auth.middleware");
+const { getJwtSecret, SESSION_COOKIE_NAME } = require("../middleware/auth.middleware");
 const httpError = require("../utils/httpError");
 const { isEmail, isNonEmptyString, normalizeEmail } = require("../utils/validation");
 
@@ -14,6 +14,20 @@ const signToken = (user) =>
       expiresIn: process.env.JWT_EXPIRES_IN || "7d",
     },
   );
+
+const cookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.COOKIE_SECURE
+    ? process.env.COOKIE_SECURE === "true"
+    : process.env.NODE_ENV === "production",
+  sameSite: process.env.COOKIE_SAMESITE || (process.env.NODE_ENV === "production" ? "none" : "lax"),
+  maxAge: Number(process.env.SESSION_COOKIE_MAX_AGE_MS || 7 * 24 * 60 * 60 * 1000),
+  path: "/",
+});
+
+const setSessionCookie = (res, user) => {
+  res.cookie(SESSION_COOKIE_NAME, signToken(user), cookieOptions());
+};
 
 const register = async (req, res, next) => {
   try {
@@ -44,7 +58,8 @@ const register = async (req, res, next) => {
       passwordHash,
     });
 
-    return res.status(201).json({ user, token: signToken(user) });
+    setSessionCookie(res, user);
+    return res.status(201).json({ user });
   } catch (error) {
     return next(error);
   }
@@ -71,13 +86,34 @@ const login = async (req, res, next) => {
       email: user.email,
       createdAt: user.createdAt,
     };
-    return res.json({ user: publicUser, token: signToken(publicUser) });
+    setSessionCookie(res, publicUser);
+    return res.json({ user: publicUser });
   } catch (error) {
     return next(error);
   }
 };
 
+const me = (req, res, next) => {
+  try {
+    const user = UserModel.findPublicById(req.user.id);
+    if (!user) {
+      throw httpError(404, "User not found");
+    }
+
+    return res.json({ user });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const logout = (_req, res) => {
+  res.clearCookie(SESSION_COOKIE_NAME, cookieOptions());
+  return res.status(204).send();
+};
+
 module.exports = {
   login,
+  logout,
+  me,
   register,
 };

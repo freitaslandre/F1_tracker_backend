@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const httpError = require("../utils/httpError");
 
+const SESSION_COOKIE_NAME = "f1rm_session";
+
 const getJwtSecret = () => {
   if (!process.env.JWT_SECRET) {
     if (process.env.NODE_ENV !== "production") {
@@ -11,11 +13,29 @@ const getJwtSecret = () => {
   return process.env.JWT_SECRET;
 };
 
-const requireAuth = (req, _res, next) => {
+const parseCookies = (cookieHeader = "") =>
+  cookieHeader.split(";").reduce((cookies, cookie) => {
+    const [rawName, ...rawValue] = cookie.trim().split("=");
+    if (!rawName) return cookies;
+    cookies[rawName] = decodeURIComponent(rawValue.join("="));
+    return cookies;
+  }, {});
+
+const getAuthToken = (req) => {
+  const cookies = parseCookies(req.headers.cookie || "");
+  if (cookies[SESSION_COOKIE_NAME]) {
+    return cookies[SESSION_COOKIE_NAME];
+  }
+
   const authorization = req.headers.authorization || "";
   const [scheme, token] = authorization.split(" ");
+  return scheme === "Bearer" ? token : "";
+};
 
-  if (scheme !== "Bearer" || !token) {
+const requireAuth = (req, _res, next) => {
+  const token = getAuthToken(req);
+
+  if (!token) {
     return next(httpError(401, "Authentication token is required"));
   }
 
@@ -37,4 +57,5 @@ const requireAuth = (req, _res, next) => {
 module.exports = {
   getJwtSecret,
   requireAuth,
+  SESSION_COOKIE_NAME,
 };
