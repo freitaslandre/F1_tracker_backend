@@ -1,5 +1,6 @@
 const { Router } = require("express");
 const AuthController = require("../controllers/auth.controller");
+const { requireAuth } = require("../middleware/auth.middleware");
 
 const router = Router();
 
@@ -64,5 +65,7 @@ router.post("/register", AuthController.register);
  *         description: Invalid credentials
  */
 router.post("/login", AuthController.login);
+router.get("/me", requireAuth, AuthController.me);
+router.post("/logout", AuthController.logout);
 
 module.exports = router;
