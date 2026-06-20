@@ -219,6 +219,55 @@ const fetchFromJolpica = async (season) => {
   );
 };
 
+const normalizeDriverStandings = (json) => {
+  const standings =
+    json?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings;
+  if (!Array.isArray(standings)) {
+    throw httpError(502, "Jolpica returned unexpected driver standings");
+  }
+
+  return standings.map((standing) => ({
+    position: stringify(standing.position),
+    points: stringify(standing.points, "0"),
+    wins: stringify(standing.wins, "0"),
+    Driver: standing.Driver,
+    Constructors: standing.Constructors || [],
+  }));
+};
+
+const normalizeConstructorStandings = (json) => {
+  const standings =
+    json?.MRData?.StandingsTable?.StandingsLists?.[0]?.ConstructorStandings;
+  if (!Array.isArray(standings)) {
+    throw httpError(502, "Jolpica returned unexpected constructor standings");
+  }
+
+  return standings.map((standing) => ({
+    position: stringify(standing.position),
+    points: stringify(standing.points, "0"),
+    wins: stringify(standing.wins, "0"),
+    Constructor: standing.Constructor,
+  }));
+};
+
+const fetchStandingsFromJolpica = async (season) => {
+  const [driverJson, constructorJson] = await Promise.all([
+    fetchJolpicaJson(`${JOLPICA_API}/${season}/driverstandings.json`),
+    fetchJolpicaJson(`${JOLPICA_API}/${season}/constructorstandings.json`),
+  ]);
+
+  const driverStandings = normalizeDriverStandings(driverJson);
+  const constructorStandings = normalizeConstructorStandings(constructorJson);
+
+  return {
+    season: stringify(season),
+    driverChampion: driverStandings[0] || null,
+    constructorChampion: constructorStandings[0] || null,
+    driverStandings,
+    constructorStandings,
+  };
+};
+
 const getRaces = async (season) => {
   const cached = cache.get(season);
   const now = Date.now();
@@ -253,7 +302,26 @@ const getRaces = async (season) => {
   }
 };
 
+const getStandings = async (season) => {
+  const cacheKey = `standings-${season}`;
+  const cached = cache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && cached.expiresAt > now) {
+    return { standings: cached.standings, cacheStatus: "HIT" };
+  }
+
+  const standings = await fetchStandingsFromJolpica(season);
+  cache.set(cacheKey, {
+    standings,
+    expiresAt: now + getCacheTtlMs(),
+  });
+
+  return { standings, cacheStatus: "MISS" };
+};
+
 module.exports = {
   getRaces,
+  getStandings,
   normalizeRaceResults,
 };
