@@ -26,6 +26,8 @@ const router = Router();
  */
 router.get("/races", F1Controller.getRaces);
 
+router.get("/standings", F1Controller.getStandings);
+
 /**
  * @swagger
  * /api/f1/vote:

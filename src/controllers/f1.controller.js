@@ -27,6 +27,29 @@ const getRaces = async (req, res, next) => {
   }
 };
 
+const getStandings = async (req, res, next) => {
+  try {
+    const currentYear = new Date().getUTCFullYear();
+    const season = String(req.query.season || currentYear);
+    const seasonNumber = Number(season);
+
+    if (
+      !Number.isInteger(seasonNumber) ||
+      seasonNumber < 1950 ||
+      seasonNumber > currentYear
+    ) {
+      throw httpError(400, `Season must be between 1950 and ${currentYear}`);
+    }
+
+    const result = await ApifyService.getStandings(season);
+    res.set("X-Cache", result.cacheStatus);
+    res.set("Cache-Control", "private, max-age=300");
+    return res.json(result.standings);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const vote = (req, res, next) => {
   try {
     const {
@@ -106,6 +129,7 @@ const removeFavorite = (req, res, next) => {
 module.exports = {
   addFavorite,
   getRaces,
+  getStandings,
   removeFavorite,
   vote,
 };
