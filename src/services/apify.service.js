@@ -277,26 +277,26 @@ const getRaces = async (season) => {
   }
 
   try {
-    const races = await fetchFromApify(season);
+    const races = await fetchFromJolpica(season);
     cache.set(season, {
       races,
       expiresAt: now + getCacheTtlMs(),
     });
-    return { races, cacheStatus: "MISS" };
+    return { races, cacheStatus: "JOLPICA" };
   } catch (error) {
     if (cached) {
       return { races: cached.races, cacheStatus: "STALE" };
     }
-    // If Apify failed and we have no cache, try the public Jolpica API as a fallback
+    // If Jolpica failed and we have no cache, try Apify as a fallback.
     try {
-      const races = await fetchFromJolpica(season);
+      const races = await fetchFromApify(season);
       cache.set(season, {
         races,
         expiresAt: now + getCacheTtlMs(),
       });
-      return { races, cacheStatus: "JOLPICA" };
+      return { races, cacheStatus: "APIFY" };
     } catch {
-      // If Jolpica also failed, throw the original error to preserve context
+      // If Apify also failed, throw the original Jolpica error to preserve context.
       throw error;
     }
   }
